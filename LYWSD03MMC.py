@@ -16,7 +16,8 @@ logger.debug("start")
 conn = sqlite3.connect('LYWSD03MMC.db')
 c = conn.cursor()
 c.execute('''CREATE TABLE IF NOT EXISTS hydrothermograph
-             (date text, temperature real, humidity integer, batteryLevel real)''')
+             (time timestamp, temperature real, humidity integer, batteryLevel real)''')
+c.execute('''CREATE INDEX IF NOT EXISTS index_time ON hydrothermograph(time)''')
 conn.commit()
 
 
@@ -26,7 +27,7 @@ class MyDelegate(btle.DefaultDelegate):
         voltage = struct.unpack('H', data[3:5])[0]/ 1000
         batteryLevel = round((voltage - 2.1),2) * 100
         temperature = struct.unpack('H', data[:2])[0] / 100
-        now = datetime.datetime.now().isoformat()
+        now = datetime.datetime.now()
         c.execute("INSERT INTO hydrothermograph VALUES (?,?,?,?)",(now,temperature,humidity,batteryLevel))
         conn.commit()
         logger.debug("humidity=%s,temperature=%s,batteryLevel=%s",humidity,temperature,batteryLevel)
