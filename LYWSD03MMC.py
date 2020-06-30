@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from bluepy import btle
 import struct 
 import time
