@@ -6,6 +6,7 @@ import logging
 import sqlite3
 import traceback
 import datetime
+import os
 
 logging.basicConfig(format='[%(levelname) 5s/%(asctime)s] %(name)s: %(message)s',
                     level=logging.DEBUG)
@@ -41,16 +42,22 @@ while True:
         ch = p.getCharacteristics(uuid=uuid)[0]
         desc = ch.getDescriptors(forUUID=0x2902)[0]
         desc.write(0x01.to_bytes(2, byteorder="little"), withResponse=True)
-        p.waitForNotifications(1.0)
+        p.waitForNotifications(5.0)
+        sleep(1)
         p.disconnect()
-        time.sleep(30)
+        sleep(2)
+        os.system("pkill bluepy-helper")
+        time.sleep(300)
     except KeyboardInterrupt:
         logger.debug("exit")
         conn.close()
         p.disconnect()
+        sleep(2)
+        os.system("pkill bluepy-helper")
         break
 
     except Exception as e:
-        time.sleep(10)
+        time.sleep(15)
+        os.system("pkill bluepy-helper")
         logger.debug(e)
         logger.debug(traceback.format_exc())
