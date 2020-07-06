@@ -6,7 +6,9 @@ import logging
 import sqlite3
 import traceback
 import datetime
-import os
+import os,signal
+import multiprocessing                                                                                                 
+import psutil
 
 logging.basicConfig(format='[%(levelname) 5s/%(asctime)s] %(name)s: %(message)s',
                     level=logging.DEBUG)
@@ -14,13 +16,8 @@ logging.basicConfig(format='[%(levelname) 5s/%(asctime)s] %(name)s: %(message)s'
 mac = ''
 uuid = 'EBE0CCC1-7A0A-4B0C-8A1A-6FF2997DA3A6'
 logger=logging.getLogger("LYWSD03MMC")
-logger.debug("start")
 conn = sqlite3.connect('LYWSD03MMC.db')
 c = conn.cursor()
-c.execute('''CREATE TABLE IF NOT EXISTS hydrothermograph
-             (time timestamp, temperature real, humidity integer, batteryLevel real)''')
-c.execute('''CREATE INDEX IF NOT EXISTS index_time ON hydrothermograph(time)''')
-conn.commit()
 
 
 class MyDelegate(btle.DefaultDelegate):
@@ -34,30 +31,77 @@ class MyDelegate(btle.DefaultDelegate):
         conn.commit()
         logger.debug("humidity=%s,temperature=%s,batteryLevel=%s",humidity,temperature,batteryLevel)
 
-
-while True:
+def ble_getdata(mac_address):
     try:
-        p = btle.Peripheral(mac)
+        p = btle.Peripheral(mac_address)
         p.setDelegate(MyDelegate())
         ch = p.getCharacteristics(uuid=uuid)[0]
         desc = ch.getDescriptors(forUUID=0x2902)[0]
         desc.write(0x01.to_bytes(2, byteorder="little"), withResponse=True)
         p.waitForNotifications(5.0)
-        sleep(1)
-        p.disconnect()
-        sleep(2)
-        os.system("pkill bluepy-helper")
-        time.sleep(300)
-    except KeyboardInterrupt:
-        logger.debug("exit")
-        conn.close()
-        p.disconnect()
-        sleep(2)
-        os.system("pkill bluepy-helper")
-        break
+        time.sleep(1)
 
+    except KeyboardInterrupt:
+            raise KeyboardInterrupt
     except Exception as e:
-        time.sleep(15)
-        os.system("pkill bluepy-helper")
-        logger.debug(e)
-        logger.debug(traceback.format_exc())
+            logger.debug(e)
+            logger.debug(traceback.format_exc())
+            raise
+    finally:
+        p.disconnect()
+        time.sleep(2)
+
+    
+
+def kill_bluepy(pid):
+    procs = psutil.Process(pid).children()
+    for p in procs:
+        if p.name == "bluepy-helper":
+            p.kill()
+            gone = p.wait()
+            logger.debug("bluepy-helper killed")
+
+
+def bluepy_timeout_killer(pid):
+    logger.debug("watchdog start")
+    time.sleep(60)
+    kill_bluepy(pid)
+    logger.debug("watchdog end and bluepy timeout")
+
+def main():
+    logger.debug("start")
+    pid = os.getpid()
+
+    c.execute('''CREATE TABLE IF NOT EXISTS hydrothermograph
+             (time timestamp, temperature real, humidity integer, batteryLevel real)''')
+    c.execute('''CREATE INDEX IF NOT EXISTS index_time ON hydrothermograph(time)''')
+    conn.commit()
+
+    while True:
+        try:
+            watchdog = multiprocessing.Process(target=bluepy_timeout_killer,args=(pid,))
+            watchdog.start()
+            logger.debug("bluepy start")
+            ble_getdata(mac)
+            kill_bluepy(pid)
+            logger.debug("bluepy end")
+            watchdog.terminate()
+            os.wait()
+            logger.debug("watchdog terminate")
+            time.sleep(300)
+        except KeyboardInterrupt:
+            logger.debug("exit")
+            conn.close()
+            watchdog.terminate()
+            kill_bluepy(pid)
+            break
+    
+        except Exception as e:
+            watchdog.terminate()
+            kill_bluepy(pid)
+            time.sleep(15)
+            logger.debug(e)
+            logger.debug(traceback.format_exc())
+
+if __name__ == "__main__":
+    main()
