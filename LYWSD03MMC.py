@@ -29,7 +29,7 @@ class MyDelegate(btle.DefaultDelegate):
         now = datetime.datetime.now()
         c.execute("INSERT INTO hydrothermograph VALUES (?,?,?,?)",(now,temperature,humidity,batteryLevel))
         conn.commit()
-        logger.debug("humidity=%s,temperature=%s,batteryLevel=%s",humidity,temperature,batteryLevel)
+        logger.info("humidity=%s,temperature=%s,batteryLevel=%s",humidity,temperature,batteryLevel)
 
 def ble_getdata(mac_address):
     try:
@@ -55,18 +55,19 @@ def ble_getdata(mac_address):
 
 def kill_bluepy(pid):
     procs = psutil.Process(pid).children()
+    logger.debug("children:%s",procs)
     for p in procs:
-        if p.name == "bluepy-helper":
+        if p.name() == "bluepy-helper":
             p.kill()
             gone = p.wait()
-            logger.debug("bluepy-helper killed")
+            logger.debug("bluepy-helper(%s) killed",p.pid)
 
 
 def bluepy_timeout_killer(pid):
     logger.debug("watchdog start")
     time.sleep(60)
     kill_bluepy(pid)
-    logger.debug("watchdog end and bluepy timeout")
+    logger.info("watchdog end and bluepy timeout")
 
 def main():
     logger.debug("start")
