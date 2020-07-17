@@ -87,18 +87,23 @@ def main():
             kill_bluepy(pid)
             logger.debug("bluepy end")
             watchdog.terminate()
-            os.wait()
+            watchdog.join()
+            watchdog.close()
             logger.debug("watchdog terminate")
             time.sleep(300)
         except KeyboardInterrupt:
             logger.debug("exit")
             conn.close()
             watchdog.terminate()
+            watchdog.join()
+            watchdog.close()
             kill_bluepy(pid)
             break
     
         except Exception as e:
             watchdog.terminate()
+            watchdog.join()
+            watchdog.close()
             kill_bluepy(pid)
             time.sleep(15)
             logger.debug(e)
